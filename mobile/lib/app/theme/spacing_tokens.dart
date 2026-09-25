@@ -18,7 +18,9 @@ abstract final class Spacing {
   static const double radiusLg = 24;
   static const double pill = 999;
 
-  static const Color shadowTint = Color(0x147B1E3A);
+  // Sky-tinted ambient shadow (deep sky #075985 at ~8% alpha) — matches the
+  // Milan Sky system; was a rose/maroon tint left over from the old palette.
+  static const Color shadowTint = Color(0x14075985);
 
   static List<BoxShadow> get raised => [
         BoxShadow(color: shadowTint, blurRadius: 12),

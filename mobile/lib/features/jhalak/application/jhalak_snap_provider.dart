@@ -65,15 +65,13 @@ class SnappedMedia {
 class JhalakSnapController extends AsyncNotifier<List<SnapTile>> {
   @override
   Future<List<SnapTile>> build() async {
-    try {
-      final res =
-          await ref.read(apiClientProvider).get<Map<String, dynamic>>('/jhalak/snaps');
-      return (res['snaps'] as List? ?? const [])
-          .map((e) => SnapTile.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } on AppException {
-      return const [];
-    }
+    // Propagate failures to AsyncError so the screen's error + Retry branch
+    // runs instead of showing a fake "empty" state that can't recover.
+    final res =
+        await ref.read(apiClientProvider).get<Map<String, dynamic>>('/jhalak/snaps');
+    return (res['snaps'] as List? ?? const [])
+        .map((e) => SnapTile.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> refresh() async {

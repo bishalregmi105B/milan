@@ -297,7 +297,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(
-                    child: Text('Something went wrong. Please try again.'),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text("Couldn't load this chat."),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              ref.invalidate(chatThreadProvider(widget.matchId)),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
                   ),
                   data: (list) {
                     _maybeScrollToBottom(list.length);

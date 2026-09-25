@@ -6,11 +6,12 @@ import '../../app/theme/motion_tokens.dart';
 class TypingIndicator extends StatefulWidget {
   const TypingIndicator({
     super.key,
-    this.color = const Color(0xFF7B1E3A),
+    this.color,
     this.loop = Motion.saathiTypingPulse,
   });
 
-  final Color color;
+  /// Defaults to the theme's primary (accent) color when null.
+  final Color? color;
   final Duration loop;
 
   @override
@@ -30,6 +31,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
 
   @override
   Widget build(BuildContext context) {
+    final dotColor = widget.color ?? Theme.of(context).colorScheme.primary;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
@@ -44,7 +46,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: Transform.translate(
                 offset: Offset(0, -lift),
-                child: CircleAvatar(radius: 3, backgroundColor: widget.color),
+                child: CircleAvatar(radius: 3, backgroundColor: dotColor),
               ),
             );
           }),

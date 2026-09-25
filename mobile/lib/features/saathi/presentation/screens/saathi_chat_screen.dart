@@ -25,6 +25,7 @@ class SaathiChatScreen extends ConsumerStatefulWidget {
 
 class _SaathiChatScreenState extends ConsumerState<SaathiChatScreen> {
   final _composer = TextEditingController();
+  final _scroll = ScrollController();
   bool _typing = false;
   String? _toneChip;
 
@@ -36,9 +37,29 @@ class _SaathiChatScreenState extends ConsumerState<SaathiChatScreen> {
   void initState() {
     super.initState();
     // P1-10: reload persisted history every time the chat is opened.
-    Future.microtask(() => ref
-        .read(saathiSessionProvider(widget.characterId).notifier)
-        .loadHistory());
+    Future.microtask(() async {
+      await ref
+          .read(saathiSessionProvider(widget.characterId).notifier)
+          .loadHistory();
+      _scrollToBottom();
+    });
+  }
+
+  @override
+  void dispose() {
+    _composer.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Keep the newest message in view — the list had no controller, so sent and
+  /// received bubbles landed below the fold until the user scrolled by hand.
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(_scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    });
   }
 
   @override
@@ -70,7 +91,11 @@ class _SaathiChatScreenState extends ConsumerState<SaathiChatScreen> {
           ),
         ]),
         actions: [
-          IconButton(icon: Icon(Icons.palette_outlined), onPressed: () {}),
+          IconButton(
+              icon: Icon(Icons.palette_outlined),
+              tooltip: 'Chat theme',
+              onPressed: () =>
+                  context.push('/saathi/chat/${widget.characterId}/theme')),
           IconButton(icon: Icon(Icons.settings_outlined), onPressed: () =>
               context.push('/saathi/settings?character=${widget.characterId}')),
         ],
@@ -92,6 +117,7 @@ class _SaathiChatScreenState extends ConsumerState<SaathiChatScreen> {
                   if (state.showCrisisCard) _crisisCard(milan),
                   Expanded(
                     child: ListView.builder(
+                      controller: _scroll,
                       padding: EdgeInsets.symmetric(vertical: Spacing.lg),
                       itemCount: state.messages.length + (showTyping ? 1 : 0),
                       itemBuilder: (context, i) {
@@ -225,6 +251,7 @@ class _SaathiChatScreenState extends ConsumerState<SaathiChatScreen> {
     if (body.isEmpty || _typing) return;
     if (regenerateVariant == 0) _composer.clear();
     setState(() => _typing = true);
+    _scrollToBottom();
     try {
       await ref.read(saathiSessionProvider(widget.characterId).notifier).send(
             body,
@@ -233,6 +260,7 @@ class _SaathiChatScreenState extends ConsumerState<SaathiChatScreen> {
           );
     } finally {
       if (mounted) setState(() => _typing = false);
+      _scrollToBottom();
     }
   }
 }

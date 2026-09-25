@@ -33,8 +33,8 @@ class ChatMessage {
   bool get isRead => readAt != null;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-        id: json['id'] as String,
-        senderId: json['sender_id'] as String,
+        id: (json['id'] ?? '').toString(),
+        senderId: (json['sender_id'] ?? '').toString(),
         body: json['body'] as String?,
         mediaUrl: json['media_url'] as String?,
         mediaType: json['media_type'] as String?,
@@ -42,7 +42,11 @@ class ChatMessage {
             ? null
             : DateTime.tryParse(json['read_at'] as String),
         isAiSuggested: json['is_ai_suggested'] as bool? ?? false,
-        createdAt: DateTime.parse(json['created_at'] as String),
+        // tryParse + fallback so one malformed row can never throw and turn the
+        // whole thread into an unrecoverable error screen (the socket path is
+        // already this defensive; the REST path was not).
+        createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
+            DateTime.now(),
       );
 
   Map<String, Object?> toCacheRow(String matchId) => {
@@ -118,15 +122,14 @@ class MatchesController extends AsyncNotifier<List<MatchSummary>> {
     // the inbox would flash its skeleton on every arriving message. A self
     // refresh keeps the current rows on screen while the refetch runs.
     ref.listen(matchesRefreshTick, (_, __) => ref.invalidateSelf());
-    try {
-      final res =
-          await ref.read(apiClientProvider).get<Map<String, dynamic>>('/matches');
-      return (res['matches'] as List)
-          .map((e) => MatchSummary.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } on AppException {
-      return const [];
-    }
+    // Let load failures propagate to AsyncError so the inbox's error+Retry UI
+    // actually runs. Swallowing them returned [] — indistinguishable from a
+    // real empty inbox, with no way to recover from a network blip.
+    final res =
+        await ref.read(apiClientProvider).get<Map<String, dynamic>>('/matches');
+    return (res['matches'] as List? ?? const [])
+        .map((e) => MatchSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }
 
@@ -135,7 +138,7 @@ final matchesProvider =
         MatchesController.new);
 
 class ChatThreadController
-    extends FamilyAsyncNotifier<List<ChatMessage>, String> {
+    extends AutoDisposeFamilyAsyncNotifier<List<ChatMessage>, String> {
   /// Messages delivered by the socket during (or before) the REST refetch.
   /// The refetch's server snapshot can lag the socket — a companion reply
   /// generated AFTER the snapshot was taken would otherwise be overwritten
@@ -208,8 +211,8 @@ class ChatThreadController
   }
 
   ChatMessage _fromCacheRow(Map<String, Object?> row) => ChatMessage(
-        id: row['id'] as String,
-        senderId: row['sender_id'] as String,
+        id: (row['id'] ?? '').toString(),
+        senderId: (row['sender_id'] ?? '').toString(),
         body: row['body'] as String?,
         mediaUrl: row['media_url'] as String?,
         mediaType: row['media_type'] as String?,
@@ -217,7 +220,8 @@ class ChatThreadController
             ? null
             : DateTime.tryParse(row['read_at'] as String),
         isAiSuggested: row['is_ai_suggested'] == 1,
-        createdAt: DateTime.parse(row['created_at'] as String),
+        createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+            DateTime.now(),
       );
 
   /// Server snapshot MERGES with current state — never replaces it. Rows the
@@ -358,8 +362,8 @@ class ChatThreadController
   }
 }
 
-final chatThreadProvider = AsyncNotifierProvider.family<ChatThreadController,
-    List<ChatMessage>, String>(ChatThreadController.new);
+final chatThreadProvider = AsyncNotifierProvider.autoDispose.family<
+    ChatThreadController, List<ChatMessage>, String>(ChatThreadController.new);
 
 /// True while the companion's reply is on its way — drives the local typing
 /// bubble until the socket delivers her message (the server's typing hint can
@@ -370,10 +374,10 @@ final chatThreadProvider = AsyncNotifierProvider.family<ChatThreadController,
 /// is what makes the indicator honest — the server's own `chat:typing` usually
 /// arrives inside that window and takes over.
 final companionPendingProvider =
-    NotifierProvider.family<CompanionPendingController, bool, String>(
+    NotifierProvider.autoDispose.family<CompanionPendingController, bool, String>(
         CompanionPendingController.new);
 
-class CompanionPendingController extends FamilyNotifier<bool, String> {
+class CompanionPendingController extends AutoDisposeFamilyNotifier<bool, String> {
   Timer? _failsafe;
   Timer? _delay;
 
@@ -534,7 +538,7 @@ final presenceProvider =
 /// owns the single `chat:typing` subscription and its expiry). A provider that
 /// held its own listener lost typing the moment it was disposed — and its 6s
 /// expiry raced the server's 4s heartbeats during a long companion generation.
-class ChatTypingController extends FamilyNotifier<bool, String> {
+class ChatTypingController extends AutoDisposeFamilyNotifier<bool, String> {
   @override
   bool build(String matchId) {
     final bridge = ref.read(realtimeBridgeProvider);
@@ -546,5 +550,5 @@ class ChatTypingController extends FamilyNotifier<bool, String> {
   }
 }
 
-final chatTypingProvider = NotifierProvider.family<ChatTypingController, bool,
-    String>(ChatTypingController.new);
+final chatTypingProvider = NotifierProvider.autoDispose.family<
+    ChatTypingController, bool, String>(ChatTypingController.new);

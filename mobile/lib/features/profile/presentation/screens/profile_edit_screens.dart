@@ -35,20 +35,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Future<void> _load() async {
     try {
       final me = await ref.read(apiClientProvider).get<Map<String, dynamic>>('/profile/me');
-      final profile = me['profile'] as Map<String, dynamic>;
+      // Null-safe: a user with no profile row yet (also reachable via
+      // /profile/privacy) used to throw a TypeError here that the
+      // AppException catch missed, leaving the screen spinning forever.
+      final profile = (me['profile'] as Map<String, dynamic>?) ?? const {};
+      final user = (me['user'] as Map<String, dynamic>?) ?? const {};
       if (!mounted) return;
       setState(() {
         _name.text = (profile['display_name'] as String?) ?? '';
         _bio.text = (profile['bio'] as String?) ?? '';
         _city.text = (profile['city'] as String?) ?? '';
-        _discreet = (me['user']['discreet_mode'] as bool?) ?? false;
-        _intent = (me['user']['intent_mode'] as String?) ?? 'serious';
+        _discreet = (user['discreet_mode'] as bool?) ?? false;
+        _intent = (user['intent_mode'] as String?) ?? 'serious';
         _loaded = true;
       });
-    } on AppException catch (e) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.code;
+        _error = e is AppException ? e.code : 'load_failed';
         _loaded = true; // never spin forever on a load failure
       });
     }

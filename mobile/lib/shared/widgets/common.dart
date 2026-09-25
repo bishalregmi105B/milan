@@ -87,9 +87,12 @@ class StoryRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
+    // Unseen rings use the Milan Sky gradient (deep sky → bright sky); seen
+    // rings fade to a muted line tone.
     final Gradient gradient = seen
-        ? const LinearGradient(colors: [Color(0xFF8A8377), Color(0xFF8A8377)])
-        : const LinearGradient(colors: [Color(0xFFF5A623), Color(0xFF7B1E3A)]);
+        ? LinearGradient(colors: [milan.line200, milan.line200])
+        : LinearGradient(colors: [milan.dhaka500, milan.dhaka100]);
     return Container(
       width: size + 6,
       height: size + 6,
@@ -126,8 +129,11 @@ class CompatibilityMeter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
     return CustomPaint(
-      painter: _ArcPainter(score / 100),
+      painter: _ArcPainter(score / 100,
+          track: milan.dhaka500.withValues(alpha: 0.16),
+          sweepStart: milan.dhaka100, sweepEnd: milan.dhaka500),
       child: SizedBox(
         width: 132,
         height: 132,
@@ -145,18 +151,22 @@ class CompatibilityMeter extends StatelessWidget {
 }
 
 class _ArcPainter extends CustomPainter {
-  const _ArcPainter(this.progress);
+  const _ArcPainter(this.progress,
+      {required this.track, required this.sweepStart, required this.sweepEnd});
   final double progress;
+  final Color track;
+  final Color sweepStart;
+  final Color sweepEnd;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.shortestSide / 2 - 8;
     final rect = Rect.fromCircle(center: center, radius: radius);
-    final track = Paint()
+    final trackPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 9
-      ..color = const Color(0x22F5A623);
+      ..color = track;
     final sweepPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 9
@@ -164,18 +174,20 @@ class _ArcPainter extends CustomPainter {
       ..shader = SweepGradient(
         startAngle: 0.75 * math.pi,
         endAngle: 2.25 * math.pi,
-        colors: const [Color(0xFFF5A623), Color(0xFF7B1E3A)],
+        colors: [sweepStart, sweepEnd],
         transform: GradientRotation(0.75 * math.pi),
       ).createShader(rect);
     final startAngle = 0.75 * math.pi;
     final totalSweep = 1.5 * math.pi;
-    canvas.drawArc(rect, startAngle, totalSweep, false, track);
+    canvas.drawArc(rect, startAngle, totalSweep, false, trackPaint);
     canvas.drawArc(rect, startAngle, totalSweep * progress.clamp(0.0, 1.0), false, sweepPaint);
   }
 
   @override
   bool shouldRepaint(_ArcPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.progress != progress ||
+      oldDelegate.sweepStart != sweepStart ||
+      oldDelegate.sweepEnd != sweepEnd;
 }
 
 /// Doc 2 §2.6 — Saathi character gallery card (illustrated, never photoreal).

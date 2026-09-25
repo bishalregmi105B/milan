@@ -117,7 +117,7 @@ class ChatWallpaperTheme {
   Map<String, dynamic> toBackendJson({required String scope, String? scopeId}) => {
         'scope': scope,
         if (scopeId != null) 'scope_id': scopeId,
-        'wallpaper_type': wallpaperType.name,
+        'wallpaper_type': _wallpaperTypeToBackend(wallpaperType),
         'wallpaper_value': wallpaperValue,
         'bubble_color_sent': _toHex(bubbleColorSent),
         'bubble_color_received': _toHex(bubbleColorReceived),
@@ -129,10 +129,7 @@ class ChatWallpaperTheme {
 
   static ChatWallpaperTheme fromBackendJson(Map<String, dynamic> json) {
     return ChatWallpaperTheme(
-      wallpaperType: WallpaperType.values.firstWhere(
-        (t) => t.name == json['wallpaper_type'],
-        orElse: () => WallpaperType.preset,
-      ),
+      wallpaperType: _wallpaperTypeFromBackend(json['wallpaper_type'] as String?),
       wallpaperValue: (json['wallpaper_value'] as String?) ?? 'brand_marigold_warm',
       bubbleColorSent: _fromHex(json['bubble_color_sent'] as String?),
       bubbleColorReceived: _fromHex(json['bubble_color_received'] as String?),
@@ -147,7 +144,44 @@ class ChatWallpaperTheme {
   }
 }
 
-String? _toHex(Color? c) => c == null ? null : c.toARGB32().toRadixString(16).padLeft(8, '0');
+/// The backend allow-list is snake_case (preset/solid/gradient/custom_upload/
+/// ai_generated); the Dart enum is camelCase. Mapping both ways is what makes
+/// theme saves actually persist instead of 422-ing. `photoSet` has no backend
+/// column yet, so it degrades to custom_upload (its first photo is kept).
+String _wallpaperTypeToBackend(WallpaperType t) {
+  switch (t) {
+    case WallpaperType.customUpload:
+      return 'custom_upload';
+    case WallpaperType.aiGenerated:
+      return 'ai_generated';
+    case WallpaperType.photoSet:
+      return 'custom_upload';
+    case WallpaperType.preset:
+    case WallpaperType.solid:
+    case WallpaperType.gradient:
+      return t.name;
+  }
+}
+
+WallpaperType _wallpaperTypeFromBackend(String? name) {
+  switch (name) {
+    case 'custom_upload':
+      return WallpaperType.customUpload;
+    case 'ai_generated':
+      return WallpaperType.aiGenerated;
+    case 'solid':
+      return WallpaperType.solid;
+    case 'gradient':
+      return WallpaperType.gradient;
+    default:
+      return WallpaperType.preset;
+  }
+}
+
+/// Backend hex validator requires a leading '#'; without it every theme save
+/// carrying bubble colors 422s and silently never persists.
+String? _toHex(Color? c) =>
+    c == null ? null : '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}';
 
 Color? _fromHex(String? hex) {
   if (hex == null || hex.isEmpty) return null;

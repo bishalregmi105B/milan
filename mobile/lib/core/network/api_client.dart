@@ -50,10 +50,17 @@ class ApiClient {
         },
         onError: (error, handler) async {
           if (error.response?.statusCode == 401) {
+            // A 401 from a credential-check endpoint means "wrong/expired code"
+            // — NOT a dead session. Refreshing/expiring on those wrongly signs
+            // the user out mid-signup (and burns the just-consumed OTP).
+            final path = error.requestOptions.path;
+            final isCredentialCheck = path.contains('/auth/otp/verify') ||
+                path.contains('/auth/google') ||
+                path.endsWith('/profile/phone');
             // Never refresh-loop on an already-retried request.
             final alreadyRetried =
                 error.requestOptions.extra['milan_retried'] == true;
-            if (!alreadyRetried) {
+            if (!isCredentialCheck && !alreadyRetried) {
               final refreshed = await _tryRefresh();
               if (refreshed) {
                 final retry = await _retry(error.requestOptions);

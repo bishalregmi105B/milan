@@ -63,23 +63,26 @@ class MilanColors extends ThemeExtension<MilanColors> {
     warning500: Color(0xFFB8791A),
   );
 
-    static const dark = MilanColors(
+  /// Dark look (Milan Sky, dark): near-black sky-tinted surfaces with a BRIGHT
+  /// sky accent — deep sky (#0369A1) is too dark to read on a dark canvas, so
+  /// the dark accent steps up to sky-400 (#38BDF8) while light uses deep sky.
+  static const dark = MilanColors(
     marigold500: Color(0xFFF5A623),
     marigold700: Color(0xFFDD9520),
-    marigold100: Color(0xFF3A2E17),
-    dhaka500: Color(0xFF6E1B34),
-    dhaka700: Color(0xFF4F0F26),
-    dhaka100: Color(0xFF3A1A24),
-    pine500: Color(0xFF1C644C),
-    pine100: Color(0xFF17352C),
+    marigold100: Color(0xFF0C2A3A),
+    dhaka500: Color(0xFF38BDF8),
+    dhaka700: Color(0xFF0EA5E9),
+    dhaka100: Color(0xFF0C2A3A),
+    pine500: Color(0xFF34D399),
+    pine100: Color(0xFF10362B),
     ink900: Color(0xFFF2F5F9),
     ink600: Color(0xFFB9C2CE),
     ink400: Color(0xFF7C8794),
-    paper0: Color(0xFF0E1116),
-    paper100: Color(0xFF1A1F27),
-    line200: Color(0xFF2A313C),
-    error500: Color(0xFFE0384C),
-    warning500: Color(0xFFA66D17),
+    paper0: Color(0xFF0B1017),
+    paper100: Color(0xFF141B24),
+    line200: Color(0xFF22303C),
+    error500: Color(0xFFF87171),
+    warning500: Color(0xFFFBBF57),
   );
 
   @override
@@ -135,20 +138,34 @@ class MilanColors extends ThemeExtension<MilanColors> {
   }
 }
 
+/// Deep sky reads on white; bright sky reads on near-black. When the user has
+/// not chosen a custom accent, the default follows the brightness.
+Color _defaultAction(Brightness brightness) =>
+    brightness == Brightness.dark ? const Color(0xFF38BDF8) : const Color(0xFF0369A1);
+
 ColorScheme _schemeFrom(MilanColors c, Brightness brightness, Color? accent) {
-  final action = accent ?? const Color(0xFF0369A1);
+  final action = accent ?? _defaultAction(brightness);
   final onAction = AccentThemeState.readableOn(action);
-  return ColorScheme(
+  // Seed first so every Material role (containers, surfaceContainer tiers,
+  // onSurfaceVariant, tertiary, inverse…) gets a coherent value, THEN pin the
+  // brand-critical roles to Milan tokens. Building the scheme by hand left
+  // NavigationBar/Card/chip container tones on off-brand Material defaults.
+  final seeded = ColorScheme.fromSeed(
+    seedColor: action,
     brightness: brightness,
+  );
+  return seeded.copyWith(
     primary: action,
     onPrimary: onAction,
     secondary: c.dhaka500,
     onSecondary: AccentThemeState.readableOn(c.dhaka500),
     error: c.error500,
-    onError: Colors.white,
+    onError: brightness == Brightness.dark ? const Color(0xFF1A1F27) : Colors.white,
     surface: c.paper0,
     onSurface: c.ink900,
     surfaceContainerHighest: c.paper100,
+    onSurfaceVariant: c.ink600,
+    outline: c.line200,
     outlineVariant: c.line200,
   );
 }
@@ -163,7 +180,7 @@ ThemeData milanDarkTheme([Color? accent]) =>
 
 ThemeData _baseTheme(MilanColors colors, Brightness brightness,
     [Color? accent]) {
-  final action = accent ?? const Color(0xFF0369A1);
+  final action = accent ?? _defaultAction(brightness);
   final onAction = AccentThemeState.readableOn(action);
   // doc 8 §A3.5: a real textTheme so any bare Text/TextStyle falls back to
   // Manrope (Sora for display roles) — not the platform default font.

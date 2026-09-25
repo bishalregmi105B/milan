@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/auth/application/auth_provider.dart';
 import '../features/chat/presentation/screens/chat_extra_screens.dart';
 import '../features/chat/presentation/screens/chat_thread_screen.dart';
 import '../features/chat/presentation/screens/matches_inbox_screen.dart';
@@ -31,9 +33,30 @@ import '../shared/widgets/main_shell.dart';
 /// Doc 3 §5 navigation graph — routes mirror doc 2 §3 screen inventory.
 /// Every inventory screen has both a route and a screen implementation.
 final routerProvider = Provider<GoRouter>((ref) {
+  // Re-run redirects whenever auth changes (e.g. a refresh-token death fires
+  // onSessionExpired → AuthController state becomes AsyncData(null)).
+  final authTick = ValueNotifier<int>(0);
+  ref.listen(authProvider, (_, __) => authTick.value++);
+  ref.onDispose(authTick.dispose);
+
   return GoRouter(
     initialLocation: '/splash',
     debugLogDiagnostics: false,
+    refreshListenable: authTick,
+    redirect: (context, state) {
+      // Public routes: the splash bootstrap and the whole onboarding/signup
+      // flow are reachable while signed out. Everything else needs a session.
+      final loc = state.matchedLocation;
+      final isPublic = loc == '/' ||
+          loc == '/splash' ||
+          loc.startsWith('/onboarding');
+      final auth = ref.read(authProvider);
+      // Only redirect when we KNOW the user is signed out (data == null) — never
+      // mid-restore (AsyncLoading), so the splash keeps control of cold start.
+      final signedOut = auth.hasValue && auth.value == null;
+      if (signedOut && !isPublic) return '/onboarding/welcome';
+      return null;
+    },
     routes: [
       // Onboarding (screens 1-11)
       GoRoute(path: '/splash', builder: (c, s) => const SplashScreen()),
