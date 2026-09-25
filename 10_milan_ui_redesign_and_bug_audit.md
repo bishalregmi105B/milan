@@ -146,43 +146,36 @@ Wikipedia Material Design / Tinder / Hinge.
 
 ## 5. Redesign roadmap (widgets / components / screens)
 
-Phase 1 — foundation (DONE this session): dark-mode Milan Sky parity, seeded
-ColorScheme, sky shadow/gradient token cleanup across shared widgets.
+Status: Phases 1-6 implemented and deployed on 2026-09-25 (flutter analyze 0
+errors; backend 101 tests pass). Two items remain deferred (need new backend
+surfaces): prompt/photo-level liking, and a read-receipt/last-seen toggle.
 
-Phase 2 — motion & feedback (next, high impact / low risk):
-- Route like / superlike / match / message-send through `core/feedback/sfx.dart`
-  for haptics (currently haptics only in settings).
-- Match celebration: animate `MatchDetailScreen` (scale-in avatars + confetti,
-  ≤900ms, skippable) and show the real match photo, not a generic icon.
-- Hero transitions: swipe card photo → full profile; matched avatar → celebration.
-- Pull-to-refresh on discovery and Jhalak (inbox already has it).
-- Button loading/pressed states in `FilledButtonThemeData`/`OutlinedButtonThemeData`.
+Phase 1 — foundation (DONE): dark-mode Milan Sky parity, seeded ColorScheme, sky
+shadow/gradient token cleanup across shared widgets.
 
-Phase 3 — discovery card (premium feel):
-- Multi-photo swipe card: extend `CandidateProfile` to carry a photo list; add
-  segmented top progress bars + tap-edges to page + a bottom gradient scrim
-  behind name/age (white text currently sits directly on the photo).
-- Render a 2-card peeking stack (scale/translate behind the top card).
-- Wire in-stack rewind (undo the last card) to the server, not a list screen.
-- Append-not-replace the deck when running low; send the distance filter.
+Phase 2 — motion & feedback (DONE): haptics on like/superlike/match/send (already
+wired) + confetti; match celebration shows the real match photo; Hero share-
+element transition (card photo ↔ profile ↔ match avatar); button disabled +
+animation states; jhalak pull-to-refresh (discovery is a deck, N/A).
 
-Phase 4 — chat richness:
-- Day separators + message grouping; send↔mic morph; delivered vs read.
-- Standardize a `MilanSheet` (grab handle + visible Close + back-dismiss) and
-  route the long-press timestamp + all bottom sheets through it.
-- Cached images everywhere (replace raw `NetworkImage`/`Image.network`).
+Phase 3 — discovery card (DONE): multi-photo card (backend `photos` gallery,
+blur-safe) with segmented progress bars + tap-to-page + bottom legibility scrim;
+peeking 2-card stack; server-backed rewind (/discovery/rewind); append-not-
+replace deck refill; distance filter sent + filtered server-side.
 
-Phase 5 — growth / trust surfaces:
-- Profile-completion meter tied to reach; verification badge on card + profile +
-  match screen with a tappable explainer.
-- Who-visited-you grid with blurred lock (mirror who-liked-you).
-- Prompt/photo-level liking (Hinge pattern) feeding "why we matched".
-- Reciprocal read-receipt / last-seen privacy toggle.
+Phase 4 — chat richness (DONE): day separators; send↔mic morph; `MilanSheet`
+(handle + close + back-dismiss) with the timestamp sheet routed through it;
+cached images (snap bubble/viewer, self avatar).
 
-Phase 6 — consistency library:
-- Extract shared state widgets (skeleton, empty, error+retry) and a colored-icon
-  dialog factory so every screen uses one set; apply skeletons to discovery deck
-  and profile view (only chat/inbox/search have them today).
+Phase 5 — growth / trust (DONE, partial): `ProfileCompletionMeter` on My Profile;
+verification badge on the match screen; Who-Visited-You screen (grid + blur
+teaser) wired to /discovery/viewed-me. DEFERRED: prompt/photo-level liking;
+reciprocal read-receipt/last-seen toggle.
+
+Phase 6 — consistency library (DONE): `MilanSkeleton`/`MilanCardSkeleton`,
+`MilanEmptyState`, `MilanErrorState(+retry)`, and a `MilanDialog` colored-icon
+factory; discovery deck + self profile now use skeletons/error states. Rolling
+these into the remaining screens is ongoing cleanup.
 
 ---
 
