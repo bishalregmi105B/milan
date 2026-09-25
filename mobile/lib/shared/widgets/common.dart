@@ -1,0 +1,251 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../app/theme/chat_theme_presets.dart';
+import '../../app/theme/chat_theme_tokens.dart';
+import '../../app/theme/color_tokens.dart';
+import '../../app/theme/spacing_tokens.dart';
+
+/// Doc 2 §2.6 (new) — thumbnail tile showing a mini sample bubble pair over
+/// the candidate wallpaper so pairing is judged together, never alone.
+class WallpaperPreviewCard extends StatelessWidget {
+  const WallpaperPreviewCard({
+    super.key,
+    required this.theme,
+    required this.selected,
+    this.onTap,
+    this.size = 108,
+  });
+
+  final ChatWallpaperTheme theme;
+  final bool selected;
+  final VoidCallback? onTap;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size * 1.25,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(Spacing.radiusMd),
+          border: Border.all(
+            color: selected ? milan.marigold500 : Colors.transparent,
+            width: 2.5,
+          ),
+          boxShadow: Spacing.raised,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(Spacing.radiusMd),
+          child: Stack(
+            children: [
+              Positioned.fill(child:
+                  DecoratedBox(decoration: resolveWallpaperDecoration(theme, Brightness.light))),
+              Positioned(
+                left: Spacing.sm, bottom: size * 0.42,
+                child: _miniBubble(context, theme.bubbleColorReceived ?? milan.paper100),
+              ),
+              Positioned(
+                right: Spacing.sm, bottom: Spacing.sm,
+                child: _miniBubble(context, theme.bubbleColorSent ?? milan.marigold500),
+              ),
+              if (selected)
+                const Positioned(
+                  top: Spacing.sm, right: Spacing.sm,
+                  child: Icon(Icons.check_circle, color: Color(0xFFC97D0C), size: 18),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _miniBubble(BuildContext context, Color fill) {
+    return Container(
+      width: 34,
+      height: 16,
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+}
+
+/// Doc 2 §2.6 — gradient ring for unseen stories.
+class StoryRing extends StatelessWidget {
+  const StoryRing({super.key, this.seen = false, required this.child, this.size = 56});
+  final bool seen;
+  final Widget child;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final Gradient gradient = seen
+        ? const LinearGradient(colors: [Color(0xFF8A8377), Color(0xFF8A8377)])
+        : const LinearGradient(colors: [Color(0xFFF5A623), Color(0xFF7B1E3A)]);
+    return Container(
+      width: size + 6,
+      height: size + 6,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(shape: BoxShape.circle, gradient: gradient),
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: ClipOval(child: child),
+      ),
+    );
+  }
+}
+
+/// Doc 2 §2.6 — pine-colored verification badge.
+class VerifiedBadge extends StatelessWidget {
+  const VerifiedBadge({super.key, this.onTap});
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Icon(Icons.verified, size: 20, color: Theme.of(context).extension<MilanColors>()!.pine500),
+    );
+  }
+}
+
+/// Doc 2 §2.6 — circular/arc meter reused on match detail + Kundali Mode.
+class CompatibilityMeter extends StatelessWidget {
+  const CompatibilityMeter({super.key, required this.score, this.label});
+  final int score;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _ArcPainter(score / 100),
+      child: SizedBox(
+        width: 132,
+        height: 132,
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('$score%',
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+            if (label != null)
+              Text(label!, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArcPainter extends CustomPainter {
+  const _ArcPainter(this.progress);
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2 - 8;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final track = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 9
+      ..color = const Color(0x22F5A623);
+    final sweepPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 9
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(
+        startAngle: 0.75 * math.pi,
+        endAngle: 2.25 * math.pi,
+        colors: const [Color(0xFFF5A623), Color(0xFF7B1E3A)],
+        transform: GradientRotation(0.75 * math.pi),
+      ).createShader(rect);
+    final startAngle = 0.75 * math.pi;
+    final totalSweep = 1.5 * math.pi;
+    canvas.drawArc(rect, startAngle, totalSweep, false, track);
+    canvas.drawArc(rect, startAngle, totalSweep * progress.clamp(0.0, 1.0), false, sweepPaint);
+  }
+
+  @override
+  bool shouldRepaint(_ArcPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+/// Doc 2 §2.6 — Saathi character gallery card (illustrated, never photoreal).
+class AICharacterCard extends StatelessWidget {
+  const AICharacterCard({
+    super.key,
+    required this.name,
+    required this.description,
+    required this.color,
+    this.initial,
+    this.onTap,
+    this.locked = false,
+  });
+  final String name;
+  final String description;
+  final Color color;
+  final String? initial;
+  final VoidCallback? onTap;
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
+        side: BorderSide(color: milan.line200),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
+        // Locked cards navigate to the paywall instead of starting a chat.
+        onTap: locked ? () => context.push('/settings/subscription') : onTap,
+        child: Padding(
+          padding: EdgeInsets.all(Spacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: color.withValues(alpha: 0.15),
+                child: Text(initial ?? name.characters.first,
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+              ),
+              SizedBox(height: Spacing.md),
+              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              SizedBox(height: Spacing.xs),
+              Expanded(
+                child: Text(description,
+                    maxLines: 4, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12.5, height: 1.35, color: Colors.grey.shade700)),
+              ),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: locked
+                    ? Chip(
+                        avatar: Icon(Icons.lock_outline, size: 12, color: milan.dhaka500),
+                        label: Text('Pass', style: TextStyle(fontSize: 10, color: milan.dhaka500)),
+                        visualDensity: VisualDensity.compact,
+                      )
+                    : Chip(
+                        label: const Text('AI', style: TextStyle(fontSize: 10)),
+                        visualDensity: VisualDensity.compact,
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

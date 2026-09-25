@@ -1,0 +1,378 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Milan design tokens — warm paper & ink, marigold accent, dhaka depth.
+   Same vocabulary as the Flutter app (doc 2 §2, doc 6 §4). Tailwind v4
+   CSS-first theme: bg-marigold-500 / text-ink-600 etc. resolve from here.
+
+   Depth strategy: BORDERS-FIRST. 1px warm borders (line family) define
+   structure; one maroon-tinted shadow is reserved for elevated overlays
+   (dropdowns, modals, toasts). Inputs sit slightly darker (inset feel).
+   Same hue families across surfaces — lightness shifts only.
+   ───────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Milan Sky — pure white surfaces with sky-blue depth. Paper tokens keep
+     their component meaning, but the default hierarchy is white-on-white. */
+  --color-paper-0: #ffffff; /* app canvas */
+  --color-paper-50: #ffffff; /* raised card */
+  --color-paper-100: #ffffff; /* panel / hover base */
+  --color-paper-200: #f0f9ff; /* inset input bg, code chips */
+  --color-paper-300: #e0f2fe; /* skeleton base, disabled fill */
+
+  /* Ink — cool text hierarchy tuned for pure white */
+  --color-ink-300: #a8b8c8;
+  --color-ink-400: #7c8794; /* decorative / ≥18px only */
+  --color-ink-500: #5a6472; /* secondary text */
+  --color-ink-600: #38546b; /* body text */
+  --color-ink-700: #1f3a54;
+  --color-ink-900: #0b1520; /* headings, sidebar */
+
+  /* Lines — sky-tinted border progression */
+  --color-line100: #eff8ff;
+  --color-line200: #dbeafe;
+  --color-line300: #bae6fd;
+  --color-line400: #7dd3fc;
+
+  /* Marigold — reserved for identity moments, not default chrome */
+  --color-marigold-100: #fde9c8;
+  --color-marigold-200: #fbd9a0;
+  --color-marigold-300: #f8c06a;
+  --color-marigold-500: #f5a623;
+  --color-marigold-600: #e0920f;
+  --color-marigold-700: #c97d0c;
+
+  /* Dhaka — deep-sky action system */
+  --color-dhaka-100: #e0f2fe;
+  --color-dhaka-200: #bae6fd;
+  --color-dhaka-500: #0369a1;
+  --color-dhaka-600: #0284c7;
+  --color-dhaka-700: #075985;
+  --color-dhaka-900: #0c4a6e;
+
+  /* Night ink — marketing dark bands */
+  --color-night-100: #e0f2fe;
+  --color-night-300: #a8b8c8;
+  --color-night-400: #7c8794;
+  --color-night-500: #38546b;
+  --color-night-700: #1f3a54;
+  --color-night-900: #0b1520;
+
+  /* Action sky — bright sky for selection; deep sky for text-bearing CTAs */
+  --color-action-100: #e0f2fe;
+  --color-action-200: #bae6fd;
+  --color-action-500: #38bdf8;
+  --color-action-600: #0ea5e9;
+  --color-action-700: #0369a1;
+
+  /* Pine — success */
+  --color-pine-100: #dcefe7;
+  --color-pine-200: #b9dfcf;
+  --color-pine-500: #1f6f54;
+  --color-pine-600: #175a44;
+  --color-pine-700: #124534;
+
+  /* Semantic */
+  --color-milanerror: #c0392b;
+  --color-milanerror-100: #f9e3df;
+  --color-warning: #b8791a;
+  --color-warning-100: #f7ecd6;
+
+  /* Typography — wired to next/font variables loaded in the root layout.
+     --font-deva (Noto Sans Devanagari) backfills every glyph Sora/Manrope
+     don't carry, so नेपाली copy matches the Latin type discipline. */
+  --font-display: var(--font-sora), var(--font-deva), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-manrope), var(--font-deva), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  /* Radius — soft, friendly (8 / 12 / 20) */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  /* Depth — sky-tinted elevation; overlays remain whisper-quiet */
+  --shadow-raised: 0 1px 2px rgba(3, 105, 161, 0.05);
+  --shadow-floating:
+    0 4px 12px rgba(3, 105, 161, 0.10), 0 12px 32px rgba(3, 105, 161, 0.12);
+
+  /* Motion */
+  --ease-out-milan: cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+body {
+  background-color: var(--color-paper-0);
+  color: var(--color-ink-600);
+  font-family: var(--font-body);
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  color: var(--color-ink-900);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+::placeholder {
+  color: var(--color-ink-400);
+}
+
+/* Sky focus ring, everywhere, keyboard only */
+:focus-visible {
+  outline: 2px solid var(--color-action-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── Keyframes (GPU-friendly: transform + opacity only) ───────────────── */
+@keyframes milan-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes milan-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes milan-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes milan-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes milan-slide-in-right {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes milan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes milan-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: milan-fade-up 0.6s var(--ease-out-milan) both;
+}
+.animate-fade-up-1 {
+  animation: milan-fade-up 0.6s var(--ease-out-milan) 0.08s both;
+}
+.animate-fade-up-2 {
+  animation: milan-fade-up 0.6s var(--ease-out-milan) 0.16s both;
+}
+.animate-fade-up-3 {
+  animation: milan-fade-up 0.6s var(--ease-out-milan) 0.24s both;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Landing-page motion (pure CSS 3D — no JS animation libraries).
+   Every keyframe is transform/opacity only (GPU friendly), and the global
+   prefers-reduced-motion kill-switch at the bottom of this file flattens
+   all of it to a single still frame.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Hero — the 3D stage. Root gets perspective; children live in 3D space. */
+.hero-perspective {
+  perspective: 1300px;
+  perspective-origin: 50% 40%;
+}
+.scene3d {
+  transform-style: preserve-3d;
+}
+/* Whole-scene tilt is driven by --mx / --my (set from pointer via JS,
+   -1..1); petals and the phone apply the vars at different magnitudes
+   inline, producing parallax between depth layers. */
+
+/* Marigold petals + hearts drifting down a 3D field. --sway / --spin are
+   per-petal; the negative animation-delay keeps the field full on load. */
+@keyframes milan-petal-fall {
+  0% {
+    transform: translate3d(0, -12vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  7% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(calc(var(--sway, 4vw) * 1.5), 46vh, 0) rotate(calc(var(--spin, 300deg) * 0.55));
+    opacity: 1;
+  }
+  93% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(calc(var(--sway, 4vw) * -0.4), 106vh, 0) rotate(var(--spin, 300deg));
+    opacity: 0;
+  }
+}
+.petal-drift {
+  animation: milan-petal-fall var(--dur, 16s) linear var(--delay, 0s) infinite;
+}
+
+/* Slow hover for the phone mockup (outer wrapper carries translateZ). */
+@keyframes milan-float {
+  0%,
+  100% {
+    transform: translateY(0) rotateZ(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotateZ(-0.5deg);
+  }
+}
+.milan-float {
+  animation: milan-float 7.5s ease-in-out infinite;
+}
+
+/* Chat bubbles arriving one after another. */
+.chat-in {
+  animation: milan-fade-up 0.55s var(--ease-out-milan) both;
+}
+
+/* Messenger-style typing dots. */
+@keyframes milan-typing {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-3.5px);
+    opacity: 1;
+  }
+}
+.typing-dot {
+  animation: milan-typing 1.15s ease-in-out infinite;
+}
+
+/* Presence dot — the "companion is alive" pulse. */
+@keyframes milan-presence {
+  0% {
+    box-shadow: 0 0 0 0 rgba(31, 111, 84, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(31, 111, 84, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(31, 111, 84, 0);
+  }
+}
+.presence-dot {
+  animation: milan-presence 2.4s ease-out infinite;
+}
+
+/* Gentle marquee divider between hero and features. */
+@keyframes milan-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  animation: milan-marquee 46s linear infinite;
+}
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+/* Scroll reveal — hidden state applies only when JS is present (html.js,
+   set by a one-liner in the root layout) so no-JS visitors still see
+   everything; reduced-motion visitors are covered by the media query. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+  .js .reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition:
+      opacity 0.8s var(--ease-out-milan),
+      transform 0.8s var(--ease-out-milan);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  .js .reveal.reveal-in {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Skeleton shimmer — brand-tinted (warm paper, never gray) */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-paper-300) 25%,
+    var(--color-paper-100) 50%,
+    var(--color-paper-300) 75%
+  );
+  background-size: 200% 100%;
+  animation: milan-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Selection carries the brand */
+::selection {
+  background: var(--color-marigold-200);
+  color: var(--color-ink-900);
+}

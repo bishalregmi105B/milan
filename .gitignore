@@ -1,0 +1,61 @@
+# ==== Secrets & credentials — never commit ====
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+key.properties
+# Firebase config contains project identifiers + API keys; keep local copies only
+google-services.json
+*-firebase-adminsdk*.json
+serviceAccount*.json
+*.p12
+*.pem
+
+# ==== OS / editor / tooling ====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+.zcode/
+.playwright-mcp/
+.cursor/
+
+# ==== Logs & runtime artifacts ====
+*.log
+celerybeat-schedule
+celerybeat.pid
+*.pid
+
+# ==== Python / backend ====
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/instance/
+backend/uploads/
+backend/downloads/
+*.sqlite3
+*.db
+
+# ==== Node / web ====
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# ==== Flutter / mobile ====
+mobile/build/
+.dart_tool/
+*.apk
+*.aab
+
+# ==== Research archives (contain tester data / third-party IP) ====
+/Flutter Complete Dating App v1.1.9.rar
+
+# ==== Throwaway screenshots at repo root ====
+/*.png

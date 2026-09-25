@@ -1,0 +1,24 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Milan junction mark: two people (rings) meeting — the overlap is the
+       milan ("meeting") — bridged by a blue arc, crowned by the marigold tika
+       dot. White canvas per doc 8 §B; crimson + marigold are brand identity. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF7EA"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+
+  <!-- left ring (crimson) -->
+  <circle cx="204" cy="304" r="108" fill="none" stroke="#7B1E3A" stroke-width="38"/>
+  <!-- right ring (marigold) -->
+  <circle cx="308" cy="304" r="108" fill="none" stroke="#F5A623" stroke-width="38"/>
+
+  <!-- blue bridge arc between the two ring tops -->
+  <path d="M 158 232 A 144 144 0 0 1 354 232"
+        fill="none" stroke="#0B84FE" stroke-width="24" stroke-linecap="round"/>
+
+  <!-- marigold tika dot at the junction crown -->
+  <circle cx="256" cy="112" r="28" fill="#F5A623"/>
+</svg>
