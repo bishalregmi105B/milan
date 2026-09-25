@@ -43,13 +43,27 @@ def validate_config(config, environment: str) -> None:
     encryption_key = str(config.get("ENCRYPTION_KEY") or "")
     if not encryption_key:
         errors.append("MILAN_ENCRYPTION_KEY is required")
+    elif _is_weak_secret(encryption_key):
+        errors.append("MILAN_ENCRYPTION_KEY must be a strong non-default value")
     else:
+        # Validate the key the SAME way app.utils.crypto._fernet() consumes it:
+        # a raw high-entropy secret is derived into a Fernet key (padded/trimmed
+        # to 32 bytes, base64'd). Rejecting such a key as "not a Fernet key"
+        # would fail a key the app uses happily — and rotating it to a fresh
+        # Fernet key would silently orphan every already-encrypted phone/
+        # location column in the database.
         try:
+            import base64
+
             from cryptography.fernet import Fernet
 
-            Fernet(encryption_key.encode("utf-8"))
+            candidate = encryption_key
+            if len(candidate) < 44 or not candidate.endswith("="):
+                candidate = base64.urlsafe_b64encode(
+                    candidate.encode().ljust(32)[:32]).decode()
+            Fernet(candidate.encode())
         except (ValueError, TypeError):
-            errors.append("MILAN_ENCRYPTION_KEY must be a valid Fernet key")
+            errors.append("MILAN_ENCRYPTION_KEY must be a valid encryption secret")
 
     origins = [str(origin).strip() for origin in (config.get("CORS_ALLOWED_ORIGINS") or [])]
     if not origins or "*" in origins:
@@ -67,15 +81,31 @@ def validate_config(config, environment: str) -> None:
         errors.append("production database URI must not use the local development credentials")
     if not str(config.get("CELERY_BROKER_URL") or "").startswith(("redis://", "rediss://")):
         errors.append("production Celery broker must use Redis")
-    if not config.get("SPARROW_SMS_TOKEN") or not config.get("SMTP_HOST"):
-        errors.append("both SMS and email OTP delivery providers must be configured")
-    if not config.get("GOOGLE_CLIENT_ID"):
-        errors.append("GOOGLE_CLIENT_ID is required for the Google sign-in route")
     if config.get("OTP_DEV_ECHO"):
         errors.append("OTP_DEV_ECHO must be disabled in production")
 
+    # Optional delivery providers are NOT security-critical: a missing OTP
+    # channel or Google client only disables that sign-in method (the routes
+    # already degrade gracefully), so they warn rather than block boot. Making
+    # them hard failures previously kept an otherwise-healthy backend — Groq
+    # companion chat included — from starting at all.
+    warnings: list[str] = []
+    smtp_ready = bool(config.get("SMTP_HOST") and config.get("SMTP_USER")
+                      and config.get("SMTP_PASSWORD"))
+    if not config.get("SPARROW_SMS_TOKEN") and not smtp_ready:
+        warnings.append("no OTP delivery provider configured (SMS token or full "
+                        "SMTP) — phone/email login cannot send codes")
+    if not config.get("GOOGLE_CLIENT_ID"):
+        warnings.append("GOOGLE_CLIENT_ID not set — Google sign-in is disabled")
+
     if errors:
         raise RuntimeError("Invalid production configuration: " + "; ".join(errors))
+
+    if warnings:
+        import logging
+
+        logging.getLogger("app.config").warning(
+            "production config warnings: %s", "; ".join(warnings))
 
 
 class BaseConfig:

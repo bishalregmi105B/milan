@@ -135,14 +135,18 @@ def send_message(match_id):
 
 
 def _companion_reply(match, human_id, body: str, data: dict) -> dict:
-    """Queue the companion's reply off the request path (reply-latency fix).
+    """Generate the companion's reply inline and return it in the HTTP response.
 
-    Generation used to sit inside this HTTP request — 5-15s of blocked
-    connection before the user's own message even confirmed. Now the POST
-    returns instantly with `companion_pending: true`; the client shows her
-    typing bubble, and the reply lands through the normal socket broadcast
-    when the async generation finishes (doc 8 §C)."""
-    from app.extensions import dispatch
+    The reply used to be produced by a fire-and-forget Celery task and delivered
+    ONLY over the socket, so a single dropped `chat:message` left the user
+    staring at a "typing…" bubble that never resolved — the reply landed in the
+    database but appeared in the app only after a manual refresh.
+
+    Now it is generated synchronously: the model call is a few seconds and the
+    eventlet worker yields during it, so the request is not really blocked. The
+    reply is returned here for the sender AND broadcast over the socket room for
+    any other device and the inbox row. The HTTP response is the source of
+    truth; the socket is a bonus, not a requirement."""
     from app.models import SaathiMessage
     from app.services import companion_account_service
 
@@ -150,22 +154,46 @@ def _companion_reply(match, human_id, body: str, data: dict) -> dict:
     if session is None:
         return {}
 
-    # Mirror the user's turn into her memory NOW — messages that arrive while
-    # she is already composing are thereby part of her context, so the
-    # generation lock can coalesce double-texts into one grounded reply.
-    if (data.get("regenerate_variant") or 0) == 0:
+    regenerate_variant = int(data.get("regenerate_variant") or 0)
+    tone_chip = (data.get("tone_chip") or "").strip().lower() or None
+
+    # Mirror the user's turn into her memory before generating (skipped on a
+    # regenerate — re-rolling her reply is not a new user turn).
+    if regenerate_variant == 0:
         db.session.add(SaathiMessage(session_id=session.id, role="user",
                                      content=body))
         db.session.commit()
 
-    dispatch(
-        __import__("app.tasks.companion_tasks", fromlist=[
-            "generate_companion_reply"]).generate_companion_reply,
-        str(match.id), str(session.id), body,
-        int(data.get("regenerate_variant") or 0),
-        (data.get("tone_chip") or "").strip().lower() or None,
-    )
-    return {"pending": True}
+    try:
+        result = groq_service.saathi_respond_full(
+            str(session.id), str(session.character_id), body,
+            regenerate_variant=regenerate_variant, tone_chip=tone_chip,
+            defer_user_mirror=True, reactive=True)
+    except groq_service.GroqUnavailableError:
+        result = {"reply": groq_service.DEGRADED_SAATHI_MESSAGE,
+                  "segments": [groq_service.DEGRADED_SAATHI_MESSAGE],
+                  "degraded": True}
+
+    from app.blueprints.saathi import (_extract_open_loops,
+                                       _summarize_into_memory,
+                                       apply_bond_progress)
+
+    apply_bond_progress(session)
+    envelopes = companion_account_service.persist_companion_reply(
+        match, session, result, pace=False)
+
+    # Turn-milestone housekeeping (memory + open loops), same cadence the
+    # standalone Saathi surface uses, so both chat paths stay in step.
+    from flask import current_app as _app
+
+    if (regenerate_variant == 0 and session.turn_count > 0
+            and session.turn_count % _app.config["SAATHI_MEMORY_SUMMARY_EVERY_TURNS"] == 0):
+        _summarize_into_memory(session)
+        _extract_open_loops(session)
+
+    return {"messages": envelopes,
+            "segments": result.get("segments") or [],
+            "typing_delay_seconds": result.get("typing_delay_seconds", 0.0)}
 
 
 @chat_bp.post("/<match_id>/icebreakers")

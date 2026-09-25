@@ -51,27 +51,34 @@ def test_production_config_rejects_wildcard_or_local_cors():
         )
 
 
-def test_production_config_requires_shared_services_and_providers():
+def test_production_config_requires_shared_services():
     with pytest.raises(RuntimeError, match="rate limiting"):
         validate_config(
             _production_config(RATELIMIT_STORAGE_URI="memory://"), "prod"
         )
     with pytest.raises(RuntimeError, match="rate limiting"):
         validate_config(_production_config(RATELIMIT_STORAGE_URI=""), "prod")
-    with pytest.raises(RuntimeError, match="OTP delivery"):
-        validate_config(
-            _production_config(SPARROW_SMS_TOKEN="", SMTP_HOST="smtp.example"),
-            "prod",
-        )
-    with pytest.raises(RuntimeError, match="OTP delivery"):
-        validate_config(
-            _production_config(SPARROW_SMS_TOKEN="configured", SMTP_HOST=""),
-            "prod",
-        )
-    with pytest.raises(RuntimeError, match="GOOGLE_CLIENT_ID"):
-        validate_config(_production_config(GOOGLE_CLIENT_ID=""), "prod")
     with pytest.raises(RuntimeError, match="OTP_DEV_ECHO"):
         validate_config(_production_config(OTP_DEV_ECHO=True), "prod")
+
+
+def test_production_config_treats_missing_providers_as_warnings():
+    """A missing OTP channel or Google client only disables that sign-in
+    method — it must NOT stop the backend (Groq companion chat and everything
+    else) from booting. These warn, they do not raise."""
+    validate_config(
+        _production_config(SPARROW_SMS_TOKEN="", SMTP_HOST="", SMTP_USER="",
+                           SMTP_PASSWORD="", GOOGLE_CLIENT_ID=""),
+        "prod",
+    )
+
+
+def test_production_config_accepts_raw_highentropy_encryption_key():
+    """crypto._fernet() derives a Fernet key from any strong secret, so the
+    validator must accept a raw 63-char key exactly as the app uses it (and
+    never demand a rotation that would orphan encrypted columns)."""
+    raw = "n" * 63
+    validate_config(_production_config(ENCRYPTION_KEY=raw), "prod")
 
 
 def test_dev_config_is_not_subject_to_production_validation():

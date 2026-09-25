@@ -348,7 +348,8 @@ def send_message(session_id):
     try:
         result = groq_service.saathi_respond_full(
             str(session.id), str(session.character_id), body,
-            regenerate_variant=regenerate_variant, tone_chip=tone_chip)
+            regenerate_variant=regenerate_variant, tone_chip=tone_chip,
+            reactive=True)
     except groq_service.GroqUnavailableError:
         result = {"reply": groq_service.DEGRADED_SAATHI_MESSAGE,
                   "segments": [groq_service.DEGRADED_SAATHI_MESSAGE],
@@ -688,7 +689,8 @@ def voice_message(session_id):
         if not transcript.strip():
             raise groq_service.GroqUnavailableError("empty transcription")
         result = groq_service.saathi_respond_full(
-            str(session.id), str(session.character_id), transcript)
+            str(session.id), str(session.character_id), transcript,
+            reactive=True)
         reply = result["reply"]
         character = session.character
         speech = groq_service.synthesize_speech(reply, voice_key=character.key)

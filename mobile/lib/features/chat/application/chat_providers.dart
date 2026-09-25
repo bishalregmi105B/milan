@@ -263,12 +263,26 @@ class ChatThreadController
 
   Future<void> send(String body, {int regenerateVariant = 0}) async {
     final matchId = arg;
-    final res = await ref.read(apiClientProvider).post<Map<String, dynamic>>(
-        '/matches/$matchId/messages',
-        body: {
-          'body': body,
-          if (regenerateVariant > 0) 'regenerate_variant': regenerateVariant,
-        });
+    final pending = ref.read(companionPendingProvider(matchId).notifier);
+    // Show a typing bubble only if the reply takes a beat. A human message
+    // POST returns in a few hundred ms, so the delayed arm never fires for it;
+    // a companion reply takes a couple of seconds to generate, so the bubble
+    // appears during the wait and is cleared the moment her reply is appended.
+    pending.arm();
+
+    final Map<String, dynamic> res;
+    try {
+      res = await ref.read(apiClientProvider).post<Map<String, dynamic>>(
+          '/matches/$matchId/messages',
+          body: {
+            'body': body,
+            if (regenerateVariant > 0) 'regenerate_variant': regenerateVariant,
+          });
+    } catch (_) {
+      pending.clear();
+      rethrow;
+    }
+
     _append(ChatMessage(
       id: res['id'] as String,
       senderId: ref.read(currentUserIdProvider) ?? 'me',
@@ -276,31 +290,38 @@ class ChatThreadController
       createdAt: DateTime.now(),
     ));
 
-    // Async generation (reply-latency fix): the POST returns immediately and
-    // her reply arrives over the socket. She has to READ the message before
-    // she can be typing it, so the bubble is armed with a delay — an instant
-    // "typing…" the moment you hit send is the tell that it is fake.
-    if (res['companion_pending'] == true) {
-      ref.read(companionPendingProvider(matchId).notifier).armDeferred();
+    // Primary path: the companion's reply is generated synchronously and
+    // returned right here. No socket dependency — the reply can never get
+    // stuck behind a dropped `chat:message`. The socket still echoes each
+    // segment for other devices; _append dedups by id.
+    final reply = res['companion_reply'] as Map<String, dynamic>?;
+    if (reply != null) {
+      pending.clear();
+      for (final m in (reply['messages'] as List? ?? const [])) {
+        final map = m as Map<String, dynamic>;
+        _append(ChatMessage(
+          id: map['id'] as String,
+          senderId: map['sender_id'] as String,
+          body: map['body'] as String?,
+          mediaUrl: map['media_url'] as String?,
+          mediaType: map['media_type'] as String?,
+          createdAt: DateTime.tryParse((map['created_at'] ?? '') as String) ??
+              DateTime.now(),
+        ));
+      }
       return;
     }
 
-    // Legacy sync path (older server or regenerate): no artificial client
-    // sleep — pacing lives server-side now (§realism). Just append.
-    final reply = res['companion_reply'] as Map<String, dynamic>?;
-    if (reply == null) return;
-    for (final m in (reply['messages'] as List? ?? const [])) {
-      final map = m as Map<String, dynamic>;
-      _append(ChatMessage(
-        id: map['id'] as String,
-        senderId: map['sender_id'] as String,
-        body: map['body'] as String?,
-        mediaUrl: map['media_url'] as String?,
-        mediaType: map['media_type'] as String?,
-        createdAt: DateTime.tryParse((map['created_at'] ?? '') as String) ??
-            DateTime.now(),
-      ));
+    // Back-compat: an older server may still answer asynchronously with
+    // `companion_pending` and deliver over the socket. Keep the deferred bubble
+    // (with its own fail-safe) for that case only.
+    if (res['companion_pending'] == true) {
+      pending.armDeferred();
+      return;
     }
+
+    // Plain human message — nothing pending.
+    pending.clear();
   }
 
   /// Media message (image/GIF/audio — no video in chat): optimistic bubble +
@@ -367,8 +388,24 @@ class CompanionPendingController extends FamilyNotifier<bool, String> {
     return false;
   }
 
+  /// Show the bubble after a short pause while a synchronous reply is being
+  /// generated, then clear it explicitly when the reply is appended. The 30s
+  /// fail-safe only matters if the request hangs. Used by the synchronous send
+  /// path — the delay is short because we are already awaiting the reply.
+  void arm() {
+    _delay?.cancel();
+    _failsafe?.cancel();
+    _delay = Timer(const Duration(milliseconds: 600), () {
+      state = true;
+      _failsafe = Timer(const Duration(seconds: 30), () {
+        if (state) state = false;
+      });
+    });
+  }
+
   /// Show the bubble after a short reading pause, with a 120s fail-safe: a
-  /// crashed generation must never leave "typing…" up forever.
+  /// crashed generation must never leave "typing…" up forever. Used only by the
+  /// legacy asynchronous (socket-delivered) reply path.
   void armDeferred() {
     _delay?.cancel();
     _failsafe?.cancel();

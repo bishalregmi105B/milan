@@ -384,12 +384,17 @@ def deliver_companion_message(session, body: str, *, message_type: str = "chat",
         logger.exception("companion message broadcast failed")
     return envelope
 
-def persist_companion_reply(match, session, result: dict) -> list[dict]:
+def persist_companion_reply(match, session, result: dict, *,
+                            pace: bool = True) -> list[dict]:
     """Write a finished companion generation into the unified thread: one
     `Message` row per segment from the companion's own user row, socket
     broadcast per segment, typing cleared, match activity bumped. Shared by
-    the inline chat path and the async generation task (§C — reply latency:
-    generation must never sit inside the HTTP request)."""
+    the inline chat path and the async generation task.
+
+    `pace=False` (the synchronous reply path) skips the between-bubble typing
+    sleeps: the whole reply is already being returned in the HTTP response, so
+    an artificial server-side pause would just delay the response for no gain.
+    The proactive/async path keeps `pace=True` for human-like bursts."""
     from app.models import Message
     from app.models.base import utcnow
     from app.sockets.chat_events import broadcast_message, broadcast_typing
@@ -411,8 +416,10 @@ def persist_companion_reply(match, session, result: dict) -> list[dict]:
             continue
         # Multi-bubble replies land the way a person sends them: a typing beat
         # between bubbles, not three messages in the same millisecond. Capped
-        # so a long second line never reads as a stall.
-        if index > 0:
+        # so a long second line never reads as a stall. Skipped when the reply
+        # is returned synchronously (pace=False) — the client renders the
+        # segments itself and a server sleep would only delay the response.
+        if pace and index > 0:
             import time
 
             try:

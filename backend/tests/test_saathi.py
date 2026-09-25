@@ -128,13 +128,17 @@ def test_saathi_requires_consent(client, app):
 def test_saathi_rejects_underage_or_suspended_user(client, app):
     from datetime import date, timedelta
 
+    # Underage and suspended accounts are blocked at the JWT boundary
+    # (user_lookup_loader in the app factory), so every authenticated route —
+    # Saathi included — returns 401 before its own body ever runs. This is the
+    # stronger posture: the account is unusable app-wide, not just here.
     underage = make_user(
         date_of_birth=date.today() - timedelta(days=16 * 365 + 30)
     )
     minor_response = client.post(
         "/api/v1/saathi/aarohi/sessions", headers=auth_headers(underage)
     )
-    assert minor_response.status_code == 403
+    assert minor_response.status_code == 401
 
     suspended = make_user()
     suspended.account_status = "suspended"
@@ -144,4 +148,76 @@ def test_saathi_rejects_underage_or_suspended_user(client, app):
     suspended_response = client.post(
         "/api/v1/saathi/aarohi/sessions", headers=auth_headers(suspended)
     )
-    assert suspended_response.status_code == 403
+    assert suspended_response.status_code == 401
+
+
+def test_companion_chat_reply_is_synchronous(client, app, monkeypatch):
+    """Texting a companion match returns her reply in the HTTP body
+    (companion_reply.messages) — never companion_pending. The reply is
+    generated inline, so a dropped socket frame can't leave the user stuck on a
+    typing bubble with no message (the reported bug)."""
+    from app.services import groq_service
+
+    monkeypatch.setattr(
+        groq_service, "saathi_respond_full",
+        lambda session_id, character_id, msg, **kwargs: {
+            "reply": "hey! khana khayeu?",
+            "segments": ["hey!", "khana khayeu?"],
+            "typing_delay_seconds": 1.0,
+        })
+
+    user = make_user()
+    start = client.post("/api/v1/saathi/aarohi/sessions",
+                        headers=auth_headers(user))
+    match_id = start.get_json()["match_id"]
+
+    resp = client.post(f"/api/v1/matches/{match_id}/messages",
+                       json={"body": "hi"}, headers=auth_headers(user))
+    assert resp.status_code == 201
+    body = resp.get_json()
+    # not the async socket-only path
+    assert body.get("companion_pending") in (None, False)
+    texts = [m["body"] for m in body["companion_reply"]["messages"]]
+    assert texts == ["hey!", "khana khayeu?"]
+
+
+def test_companion_reply_does_not_defer_when_user_is_waiting(app, monkeypatch):
+    """A reactive reply must never be deferred, even when her presence says she
+    is asleep/busy — parking a direct reply for hours is the 'she never replied'
+    bug. `should_defer` is short-circuited on the reactive path and never
+    consulted."""
+    from app.services import (groq_service, language_engine, realism_engine)
+
+    called = {"defer": False}
+
+    def _tripwire(state, **kwargs):
+        called["defer"] = True
+        return True
+
+    # Force the real (non-mock) pipeline but keep it fully offline.
+    monkeypatch.setattr(groq_service, "_mock_mode", lambda: False)
+    monkeypatch.setattr(groq_service, "check_prompt_injection", lambda text: False)
+    monkeypatch.setattr(groq_service, "_chat",
+                        lambda *a, **k: "hey! khana khayeu?")
+    monkeypatch.setattr(groq_service, "moderate_content",
+                        lambda text: {"flagged": False, "categories": [], "available": True})
+    monkeypatch.setattr(language_engine, "violates", lambda reply, style: None)
+    monkeypatch.setattr(realism_engine, "should_defer", _tripwire)
+
+    user = make_user()
+    from app.models import SaathiCharacter
+    from app.services import companion_account_service
+
+    with app.app_context():
+        from app.blueprints.saathi import ensure_characters_seeded
+
+        ensure_characters_seeded()
+        character = SaathiCharacter.query.filter_by(key="aarohi").first()
+        _match, session = companion_account_service.ensure_companion_match(
+            user.id, character)
+        result = groq_service.saathi_respond_full(
+            str(session.id), str(session.character_id), "hey", reactive=True)
+
+    assert called["defer"] is False  # never even asked — reactive wins
+    assert result.get("deferred") is not True
+    assert result.get("reply")

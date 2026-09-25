@@ -659,7 +659,8 @@ def _user_profile_context(user_id) -> dict | None:
 def saathi_respond_full(session_id: str, character_id: str, user_message: str,
                         regenerate_variant: int = 0,
                         tone_chip: str | None = None,
-                        defer_user_mirror: bool = False) -> dict:
+                        defer_user_mirror: bool = False,
+                        reactive: bool = False) -> dict:
     """The companion reply pipeline (doc 8 §C).
 
     One path for every character — the practice-coach branch is gone. Order:
@@ -802,7 +803,11 @@ def saathi_respond_full(session_id: str, character_id: str, user_message: str,
         energy=day.get("energy", "normal"))
 
     # ── stage 8: sometimes she is genuinely unavailable ──────────────────
-    if regenerate_variant == 0 and realism_engine.should_defer(day["state"]):
+    # `reactive` (the user just texted and is waiting) never defers: parking a
+    # direct reply for hours is the "she never replied" bug. Deferral is only
+    # for the proactive engine, which has no one waiting on the request.
+    if (not reactive and regenerate_variant == 0
+            and realism_engine.should_defer(day["state"])):
         delay = realism_engine.defer_delay_seconds(day["state"], day)
         reason = realism_engine.defer_reason(day["state"], day)
         _schedule_deferred_reply(session, reply, delay, reason)
