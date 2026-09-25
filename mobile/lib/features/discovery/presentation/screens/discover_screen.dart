@@ -8,6 +8,7 @@ import '../../../../app/theme/spacing_tokens.dart';
 import '../../../../core/feedback/sfx.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../shared/widgets/swipe_card.dart';
+import '../../../../shared/widgets/states.dart';
 import '../../application/discovery_provider.dart';
 
 /// Screen 19 — Discover swipe deck; default authenticated home.
@@ -47,6 +48,11 @@ class DiscoverScreen extends ConsumerWidget {
             icon: const Icon(Icons.favorite_border),
             onPressed: () => context.push('/discover/who-liked-you'),
           ),
+          IconButton(
+            tooltip: 'Who visited you',
+            icon: const Icon(Icons.visibility_outlined),
+            onPressed: () => context.push('/discover/who-visited'),
+          ),
           Padding(
             padding: EdgeInsets.only(right: Spacing.lg),
             child: ActionChip(
@@ -62,21 +68,9 @@ class DiscoverScreen extends ConsumerWidget {
         ],
       ),
       body: candidates.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.wifi_off, color: milan.ink400),
-              SizedBox(height: Spacing.md),
-              Text('Something went wrong. Please try again.'),
-              SizedBox(height: Spacing.lg),
-              OutlinedButton(
-                onPressed: () => ref.invalidate(discoveryProvider),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
+        loading: () => const MilanCardSkeleton(),
+        error: (e, _) => MilanErrorState(
+          onRetry: () => ref.invalidate(discoveryProvider),
         ),
         data: (list) {
           if (list.isEmpty) {
@@ -88,24 +82,49 @@ class DiscoverScreen extends ConsumerWidget {
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.all(Spacing.xl),
-                  child: SwipeCard(
-                    key: ValueKey(candidate.id),
-                    controller: ref.watch(
-                      swipeCardControllerProvider(candidate.id),
-                    ),
-                    mediaUrls: [
-                      if (candidate.photoUrl != null) candidate.photoUrl!,
+                  child: Stack(
+                    children: [
+                      // Peeking next card (scaled + nudged down) so the deck
+                      // reads as a stack, not a single floating card.
+                      if (list.length > 1)
+                        Positioned.fill(
+                          child: Transform.scale(
+                            scale: 0.94,
+                            alignment: Alignment.topCenter,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 14),
+                              child: IgnorePointer(
+                                child: SwipeCard(
+                                  key: ValueKey('peek-${list[1].id}'),
+                                  mediaUrls: list[1].gallery,
+                                  name: list[1].name,
+                                  age: list[1].age,
+                                  distanceKm: list[1].distanceKm,
+                                  verified: list[1].verified,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      SwipeCard(
+                        key: ValueKey(candidate.id),
+                        heroTag: 'photo-${candidate.id}',
+                        controller: ref.watch(
+                          swipeCardControllerProvider(candidate.id),
+                        ),
+                        mediaUrls: candidate.gallery,
+                        name: candidate.name,
+                        age: candidate.age,
+                        distanceKm: candidate.distanceKm,
+                        verified: candidate.verified,
+                        onLike: () => _swipe(context, ref, candidate.id, 'like'),
+                        onPass: () => _swipe(context, ref, candidate.id, 'pass'),
+                        onSuperlike: () =>
+                            _swipe(context, ref, candidate.id, 'superlike'),
+                        onTapProfile: () =>
+                            context.push('/profile/${candidate.id}/public'),
+                      ),
                     ],
-                    name: candidate.name,
-                    age: candidate.age,
-                    distanceKm: candidate.distanceKm,
-                    verified: candidate.verified,
-                    onLike: () => _swipe(context, ref, candidate.id, 'like'),
-                    onPass: () => _swipe(context, ref, candidate.id, 'pass'),
-                    onSuperlike: () =>
-                        _swipe(context, ref, candidate.id, 'superlike'),
-                    onTapProfile: () =>
-                        context.push('/profile/${candidate.id}/public'),
                   ),
                 ),
               ),
@@ -114,6 +133,23 @@ class DiscoverScreen extends ConsumerWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    _ActionCircle(
+                      icon: Icons.replay,
+                      color: milan.ink400,
+                      onTap: () async {
+                        final res = await ref
+                            .read(discoveryProvider.notifier)
+                            .rewind();
+                        if (res['rewound'] != true && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(res['reason'] == 'rewind_cap'
+                                ? 'Rewind is a premium feature.'
+                                : 'Nothing to rewind.'),
+                          ));
+                        }
+                      },
+                    ),
+                    SizedBox(width: Spacing.xl),
                     _ActionCircle(
                       icon: Icons.close,
                       color: milan.ink400,

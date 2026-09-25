@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +6,7 @@ import '../../app/theme/chat_theme_tokens.dart';
 import '../../app/theme/color_tokens.dart';
 import '../../app/theme/spacing_tokens.dart';
 import '../../app/theme/accent_theme.dart';
+import 'milan_sheet.dart';
 
 /// Messenger-style bubble (global chat redesign): white chat surface, accent
 /// (blue-by-default, user-selectable) sent bubbles, soft grey received,
@@ -118,11 +120,15 @@ class ChatBubble extends ConsumerWidget {
 
   void _showTimestampSheet(BuildContext context) {
     if (timestamp == null) return;
-    showModalBottomSheet<void>(
+    showMilanSheet<void>(
       context: context,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.all(Spacing.xl),
-        child: Text(_format(timestamp!)),
+      title: 'Sent',
+      builder: (sheetContext) => Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: Spacing.md),
+          child: Text(_format(timestamp!)),
+        ),
       ),
     );
   }
@@ -150,7 +156,7 @@ class SnapBubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(Spacing.radiusLg),
           image: expired
               ? null
-              : DecorationImage(image: NetworkImage(thumbnailUrl), fit: BoxFit.cover),
+              : DecorationImage(image: CachedNetworkImageProvider(thumbnailUrl), fit: BoxFit.cover),
           color: milan.paper100,
         ),
         child: expired

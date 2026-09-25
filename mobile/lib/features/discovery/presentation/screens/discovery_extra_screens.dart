@@ -119,6 +119,7 @@ class _DiscoveryFiltersScreenState
               controller.applyFilters(
                 min: _age.start.round(),
                 max: _age.end.round(),
+                distanceKm: _distanceKm.round(),
                 cityValue: _city.text.trim(),
                 verified: _verifiedOnly,
                 intentValue: _intent,
@@ -280,11 +281,40 @@ class _MatchDetailScreenState extends ConsumerState<MatchDetailScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircleAvatar(radius: 44, child: Icon(Icons.person, size: 40)),
+                Builder(builder: (context) {
+                  final photo = _match?['user']?['photo_url'] as String?;
+                  final url = (photo != null && photo.isNotEmpty)
+                      ? ref.read(apiClientProvider).resolveMediaUrl(photo)
+                      : null;
+                  return Hero(
+                    tag: 'photo-${otherUserId ?? widget.matchId}',
+                    child: CircleAvatar(
+                      radius: 44,
+                      backgroundColor: milan.paper100,
+                      backgroundImage:
+                          url != null ? CachedNetworkImageProvider(url) : null,
+                      child: url == null
+                          ? Icon(Icons.person, size: 40, color: milan.ink400)
+                          : null,
+                    ),
+                  );
+                }),
                 SizedBox(height: Spacing.lg),
-                Text(
-                  _match?['user']?['display_name'] ?? 'Your match',
-                  style: context.h2,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _match?['user']?['display_name'] ?? 'Your match',
+                        style: context.h2,
+                      ),
+                    ),
+                    if ((_match?['user']?['is_verified'] as bool?) ?? false) ...[
+                      SizedBox(width: Spacing.sm),
+                      Icon(Icons.verified, size: 20, color: milan.pine500),
+                    ],
+                  ],
                 ),
                 SizedBox(height: Spacing.xl),
                 CompatibilityMeter(score: score, label: 'compatibility'),
@@ -758,6 +788,163 @@ class BoostScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Screen — Who Viewed Me (doc 8 §C9). Premium sees the viewer grid; free sees
+/// the count with a blurred teaser (same gating as Who Liked You).
+class WhoVisitedYouScreen extends ConsumerStatefulWidget {
+  const WhoVisitedYouScreen({super.key});
+
+  @override
+  ConsumerState<WhoVisitedYouScreen> createState() =>
+      _WhoVisitedYouScreenState();
+}
+
+class _WhoVisitedYouScreenState extends ConsumerState<WhoVisitedYouScreen> {
+  Map<String, dynamic>? _data;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final res = await ref
+          .read(apiClientProvider)
+          .get<Map<String, dynamic>>('/discovery/viewed-me');
+      if (!mounted) return;
+      setState(() {
+        _data = res;
+        _loading = false;
+      });
+    } on AppException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.displayMessage;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
+    final premium = _data?['premium'] as bool? ?? false;
+    final viewers = (_data?['viewers'] as List? ?? const []);
+    final count = _data?['viewer_count'] as int? ?? 0;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Who visited you')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(_error!, textAlign: TextAlign.center),
+                    SizedBox(height: Spacing.md),
+                    FilledButton(onPressed: _load, child: const Text('Retry')),
+                  ]),
+                )
+              : count == 0
+                  ? Center(
+                      child: Text('No profile visits yet.',
+                          style: TextStyle(color: milan.ink600)))
+                  : ListView(
+                      padding: EdgeInsets.all(Spacing.xl),
+                      children: [
+                        Text('$count ${count == 1 ? "person" : "people"} viewed you',
+                            style: context.h3),
+                        SizedBox(height: Spacing.sm),
+                        Text(
+                          premium
+                              ? 'Tap anyone to see their profile.'
+                              : 'Get a Milan pass to see who they are.',
+                          style: TextStyle(fontSize: 13, color: milan.ink600),
+                        ),
+                        SizedBox(height: Spacing.lg),
+                        GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          childAspectRatio: 0.78,
+                          mainAxisSpacing: Spacing.md,
+                          crossAxisSpacing: Spacing.md,
+                          children: [
+                            if (premium)
+                              for (final v in viewers)
+                                _VisitorCard(visitor: v as Map<String, dynamic>)
+                            else
+                              for (var i = 0; i < count.clamp(0, 6); i++)
+                                const _LockedVisitorCard(),
+                          ],
+                        ),
+                      ],
+                    ),
+    );
+  }
+}
+
+class _VisitorCard extends StatelessWidget {
+  const _VisitorCard({required this.visitor});
+  final Map<String, dynamic> visitor;
+
+  @override
+  Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
+    final photo = visitor['photo_url'] as String?;
+    final id = visitor['id'] as String?;
+    return GestureDetector(
+      onTap: id == null ? null : () => context.push('/profile/$id/public'),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(Spacing.radiusMd),
+        child: Stack(fit: StackFit.expand, children: [
+          if (photo != null && photo.isNotEmpty)
+            CachedNetworkImage(imageUrl: photo, fit: BoxFit.cover)
+          else
+            ColoredBox(color: milan.paper100),
+          Positioned(
+            left: 8,
+            right: 8,
+            bottom: 8,
+            child: Text(
+              visitor['display_name'] as String? ?? 'Someone',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _LockedVisitorCard extends StatelessWidget {
+  const _LockedVisitorCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(Spacing.radiusMd),
+      child: Stack(fit: StackFit.expand, children: [
+        ColoredBox(color: milan.paper100),
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: const SizedBox.shrink(),
+        ),
+        Center(child: Icon(Icons.lock_rounded, color: milan.ink400)),
+      ]),
     );
   }
 }

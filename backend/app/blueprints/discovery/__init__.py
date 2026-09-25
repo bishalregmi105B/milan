@@ -70,6 +70,15 @@ def candidates():
             if u.profile and (u.profile.display_name or "").strip() and u.photos]
 
     ranked = rank_candidates(viewer, pool)[:DAILY_CANDIDATE_LIMIT]
+    # Distance filter (client sends max_distance_km): drop candidates beyond the
+    # radius; keep unknown-distance candidates rather than hiding them outright.
+    max_distance = args.get("max_distance_km", type=int)
+    if max_distance:
+        _vp = viewer.profile
+        ranked = [
+            (u, s) for (u, s) in ranked
+            if (_d := _distance_for(_vp, u)) is None or _d <= max_distance
+        ]
     biases = preference_bias_for(
         viewer.id,
         [(user, user.photos[0].url if user.photos else None) for user, _ in ranked],
@@ -88,6 +97,14 @@ def candidates():
                 # doc 8 §A4.3: the deck always carries distance — the client
                 # renders it; the ranking already consumed the raw value.
                 "distance_km": _distance_for(viewer_profile, user),
+                # Multi-photo swipe card: the whole gallery for a normal
+                # candidate; a discreet/blurred candidate exposes only the
+                # first (preview) so their gallery never leaks to a non-match.
+                "photos": (
+                    [p.url for p in user.photos]
+                    if not (user.discreet_mode and user.id not in matched_ids)
+                    else ([user.photos[0].url] if user.photos else [])
+                ),
                 # Blur-until-mutual-interest (doc 1 §4.4): discreet users' photos
                 # stay blurred to non-matches; client renders the blur state.
                 "is_blurred": bool(user.discreet_mode) and user.id not in matched_ids,

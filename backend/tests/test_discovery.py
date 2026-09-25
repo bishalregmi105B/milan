@@ -62,6 +62,38 @@ def test_candidates_exclude_self_and_blocked(client, app):
     assert str(c.id) in ids
 
 
+def test_candidates_carry_photo_gallery(client, app):
+    """Multi-photo swipe card: each candidate ships a `photos` array (all of
+    their photos) so the card can page through them, not just photo_url."""
+    from app.models import Photo
+
+    a = make_user("A")
+    c = make_user("C")
+    db.session.add(Photo(user_id=c.id, url="https://cdn.test/c1.jpg"))
+    db.session.add(Photo(user_id=c.id, url="https://cdn.test/c2.jpg"))
+    db.session.commit()
+
+    resp = client.get("/api/v1/discovery/candidates",
+                      headers=auth_headers(a)).get_json()
+    cand = next(x for x in resp["candidates"] if x["id"] == str(c.id))
+    assert cand["photos"] == ["https://cdn.test/c1.jpg", "https://cdn.test/c2.jpg"]
+
+
+def test_candidates_accept_distance_filter(client, app):
+    """The deck accepts max_distance_km without error (server-side filter)."""
+    from app.models import Photo
+
+    a = make_user("A")
+    c = make_user("C")
+    db.session.add(Photo(user_id=c.id, url="https://cdn.test/c.jpg"))
+    db.session.commit()
+
+    resp = client.get("/api/v1/discovery/candidates?max_distance_km=50",
+                      headers=auth_headers(a))
+    assert resp.status_code == 200
+    assert "candidates" in resp.get_json()
+
+
 def test_kundali_requires_opt_in_birth_details(client, app):
     a = make_user("A")
     b = make_user("B")

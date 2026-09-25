@@ -50,6 +50,7 @@ class SwipeCard extends StatefulWidget {
     this.onSuperlike,
     this.onTapProfile,
     this.controller,
+    this.heroTag,
   });
 
   final List<String> mediaUrls;
@@ -58,6 +59,7 @@ class SwipeCard extends StatefulWidget {
   final double? distanceKm;
   final bool verified;
   final String? promptOverlay;
+  final String? heroTag;
   final Future<bool> Function()? onLike;
   final Future<bool> Function()? onPass;
   final Future<bool> Function()? onSuperlike;
@@ -251,7 +253,9 @@ class _SwipeCardState extends State<SwipeCard>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                ColoredBox(
+                _HeroWrap(
+                  tag: widget.heroTag,
+                  child: ColoredBox(
                   color: milan.paper100,
                   child: widget.mediaUrls.isEmpty
                       ? Center(
@@ -288,7 +292,51 @@ class _SwipeCardState extends State<SwipeCard>
                                 Container(color: Colors.grey.shade300),
                           ),
                         ),
+                  ),
                 ),
+                // Legibility scrim so white name/age text stays readable over a
+                // bright photo (NNGroup text-over-image finding).
+                const Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.center,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x00000000), Color(0x99000000)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Segmented photo progress bars (Tinder/Hinge parity) — only
+                // when there is more than one photo to page through.
+                if (widget.mediaUrls.length > 1)
+                  Positioned(
+                    top: Spacing.md,
+                    left: Spacing.md,
+                    right: Spacing.md,
+                    child: IgnorePointer(
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < widget.mediaUrls.length; i++)
+                            Expanded(
+                              child: Container(
+                                height: 3,
+                                margin: EdgeInsets.symmetric(
+                                    horizontal: Spacing.xs / 2),
+                                decoration: BoxDecoration(
+                                  color: i == _page
+                                      ? Colors.white
+                                      : Colors.white.withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 // Decision stamps — the interest feedback the deck never had.
                 _DecisionStamp(
                   label: 'LIKE',
@@ -487,4 +535,17 @@ class _DecisionStamp extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Wraps [child] in a [Hero] only when a [tag] is supplied — lets a card photo
+/// share-element-transition into the full profile without forcing a tag (and a
+/// tag collision) on every card in a peeking stack.
+class _HeroWrap extends StatelessWidget {
+  const _HeroWrap({required this.child, this.tag});
+  final Widget child;
+  final String? tag;
+
+  @override
+  Widget build(BuildContext context) =>
+      tag == null ? child : Hero(tag: tag!, child: child);
 }

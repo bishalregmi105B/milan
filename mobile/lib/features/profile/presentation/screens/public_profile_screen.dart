@@ -81,7 +81,9 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
     return ListView(padding: const EdgeInsets.only(bottom: 48), children: [
       Stack(children: [
         if (photos.isNotEmpty)
-          SizedBox(
+          Hero(
+            tag: 'photo-${widget.userId}',
+            child: SizedBox(
             height: 280,
             width: double.infinity,
             child: p['is_blurred'] == true
@@ -99,7 +101,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                         )),
                   ])
                 : CachedNetworkImage(imageUrl: photos.first, fit: BoxFit.cover),
-          )
+          ))
         else
           Container(height: 180, color: milan.paper100),
         if (photos.length > 1)

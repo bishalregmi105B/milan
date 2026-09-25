@@ -197,6 +197,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 builder: (c, s) => const WhoLikedYouScreen(),
               ),
               GoRoute(
+                path: '/discover/who-visited',
+                builder: (c, s) => const WhoVisitedYouScreen(),
+              ),
+              GoRoute(
                 path: '/discover/boost',
                 builder: (c, s) => const BoostScreen(),
               ),

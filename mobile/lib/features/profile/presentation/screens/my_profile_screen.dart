@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../../../../app/theme/spacing_tokens.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../auth/application/auth_provider.dart';
 import '../../../../shared/widgets/common.dart';
+import '../../../../shared/widgets/states.dart';
 
 /// Screen 12 — self-view profile. Everything is loaded from `/profile/me`:
 /// the account you set up at signup is shown here as-is (name, photo,
@@ -67,14 +69,9 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? _ProfileSkeleton()
           : _failed || _me == null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text('Could not load your profile.',
-                      style: TextStyle(color: milan.ink600)),
-                  SizedBox(height: Spacing.md),
-                  FilledButton(onPressed: _load, child: const Text('Retry')),
-                ]))
+              ? MilanErrorState(onRetry: _load)
               : _buildBody(_me!, milan),
     );
   }
@@ -98,13 +95,19 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     return ListView(
       padding: EdgeInsets.all(Spacing.xl),
       children: [
+        ProfileCompletionMeter(
+          percent: ProfileCompletionMeter.computeFrom(me),
+          missing: ProfileCompletionMeter.missingFrom(me),
+          onTap: () => context.push('/profile/edit'),
+        ),
+        SizedBox(height: Spacing.lg),
         Row(children: [
           StoryRing(
             seen: true,
             child: CircleAvatar(
               radius: 30,
               backgroundImage:
-                  photos.isNotEmpty ? NetworkImage(photos.first) : null,
+                  photos.isNotEmpty ? CachedNetworkImageProvider(photos.first) : null,
               child: photos.isEmpty ? const Icon(Icons.person) : null,
             ),
           ),
@@ -229,6 +232,29 @@ class _SettingsTile extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Spacing.radiusMd)),
         onTap: onTap,
       ),
+    );
+  }
+}
+
+/// Loading placeholder for the self-profile (consistency library skeletons).
+class _ProfileSkeleton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: EdgeInsets.all(Spacing.xl),
+      children: [
+        const MilanSkeleton(height: 64, radius: 16),
+        SizedBox(height: Spacing.lg),
+        Row(children: [
+          const MilanSkeleton(width: 60, height: 60, radius: 30),
+          SizedBox(width: Spacing.lg),
+          const Expanded(child: MilanSkeleton(height: 22)),
+        ]),
+        SizedBox(height: Spacing.xl),
+        const MilanSkeleton(height: 120, radius: 16),
+        SizedBox(height: Spacing.lg),
+        const MilanSkeleton(height: 120, radius: 16),
+      ],
     );
   }
 }

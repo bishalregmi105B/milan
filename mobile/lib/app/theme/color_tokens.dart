@@ -218,6 +218,11 @@ ThemeData _baseTheme(MilanColors colors, Brightness brightness,
       style: FilledButton.styleFrom(
         backgroundColor: action,
         foregroundColor: onAction,
+        // Keep disabled buttons legible rather than washed out (NNGroup: greyed
+        // controls hurt UX); pressed/hover come from M3 state overlays.
+        disabledBackgroundColor: colors.line200,
+        disabledForegroundColor: colors.ink400,
+        animationDuration: const Duration(milliseconds: 150),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Spacing.radiusMd)),
         // Height-only touch target. Size.fromHeight() sets minimum WIDTH to
         // infinity, which starves sibling text in Rows/ListTiles down to one
@@ -228,6 +233,8 @@ ThemeData _baseTheme(MilanColors colors, Brightness brightness,
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: action,
+        disabledForegroundColor: colors.ink400,
+        animationDuration: const Duration(milliseconds: 150),
         side: BorderSide(color: action),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Spacing.radiusMd)),
         minimumSize: const Size(0, 48),

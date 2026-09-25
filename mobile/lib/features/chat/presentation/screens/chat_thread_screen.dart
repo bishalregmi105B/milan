@@ -119,6 +119,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
   }
 
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   @override
   void dispose() {
     ref.read(composerProvider).remove(_composer);
@@ -325,12 +328,23 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         }
                         final m = list[i];
                         final sent = myId != null && m.senderId == myId;
-                        return _buildMessage(
+                        // Day separator when the calendar day changes (or on the
+                        // first message) — the thread used to run every day
+                        // together with no time context.
+                        final prev = i > 0 ? list[i - 1] : null;
+                        final showDay = prev == null ||
+                            !_sameDay(prev.createdAt, m.createdAt);
+                        final bubble = _buildMessage(
                           context,
                           m,
                           sent,
                           accent,
                           resolved.bubbleShape,
+                        );
+                        if (!showDay) return bubble;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [_DaySeparator(day: m.createdAt), bubble],
                         );
                       },
                     );
@@ -400,29 +414,32 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      IconButton(
-                        icon: Icon(
-                          Icons.mic_none,
-                          color: _composer.text.trim().isEmpty
-                              ? const Color(0xFF8A919C)
-                              : accent,
-                        ),
-                        onPressed: () =>
-                            context.push('/chat/${widget.matchId}/voice-note'),
-                      ),
-                      CircleAvatar(
-                        radius: 19,
-                        backgroundColor: accent,
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          icon: Icon(
-                            Icons.send,
-                            size: 18,
-                            color: AccentThemeState.readableOn(accent),
+                      // Send↔mic morph: an empty field shows the voice-note
+                      // mic; the moment there's text it becomes the send button.
+                      if (_composer.text.trim().isEmpty)
+                        IconButton(
+                          icon: const Icon(
+                            Icons.mic_none,
+                            color: Color(0xFF8A919C),
                           ),
-                          onPressed: _send,
+                          tooltip: 'Voice note',
+                          onPressed: () =>
+                              context.push('/chat/${widget.matchId}/voice-note'),
+                        )
+                      else
+                        CircleAvatar(
+                          radius: 19,
+                          backgroundColor: accent,
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: Icon(
+                              Icons.send,
+                              size: 18,
+                              color: AccentThemeState.readableOn(accent),
+                            ),
+                            onPressed: _send,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -706,5 +723,52 @@ class ComposerRegistry {
       c.selection = TextSelection.collapsed(offset: value.length);
     }
     onChanged?.call();
+  }
+}
+
+/// Centered day chip between messages from different calendar days.
+class _DaySeparator extends StatelessWidget {
+  const _DaySeparator({required this.day});
+  final DateTime day;
+
+  String _label(BuildContext context) {
+    final now = DateTime.now();
+    final d = DateTime(day.year, day.month, day.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final diff = today.difference(d).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final y = d.year == now.year ? '' : ', ${d.year}';
+    return '${months[d.month - 1]} ${d.day}$y';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: milan.paper100,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: milan.line200),
+          ),
+          child: Text(
+            _label(context),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: milan.ink600,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

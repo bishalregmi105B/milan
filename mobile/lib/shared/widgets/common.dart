@@ -261,3 +261,99 @@ class AICharacterCard extends StatelessWidget {
     );
   }
 }
+
+/// Profile-completion meter (growth pattern): shows how complete the profile is
+/// and nudges the next missing item, tied to "be seen more". Tapping opens the
+/// editor. Pass a fraction 0..1 and the ordered list of still-missing labels.
+class ProfileCompletionMeter extends StatelessWidget {
+  const ProfileCompletionMeter({
+    super.key,
+    required this.percent,
+    this.missing = const [],
+    this.onTap,
+  });
+
+  final double percent;
+  final List<String> missing;
+  final VoidCallback? onTap;
+
+  /// Standard weighting used across the app so the number is consistent.
+  static double computeFrom(Map<String, dynamic> me) {
+    final profile = (me['profile'] as Map?) ?? const {};
+    final photos = (profile['photos'] as List?) ?? const [];
+    final prompts = (profile['prompts'] as List?) ?? const [];
+    final checks = <bool>[
+      ((profile['display_name'] as String?) ?? '').trim().isNotEmpty,
+      ((profile['bio'] as String?) ?? '').trim().length >= 20,
+      photos.isNotEmpty,
+      photos.length >= 3,
+      ((profile['city'] as String?) ?? '').trim().isNotEmpty,
+      ((profile['interests'] as List?) ?? const []).isNotEmpty,
+      prompts.isNotEmpty,
+      (me['user']?['is_verified'] as bool?) ?? false,
+    ];
+    final done = checks.where((c) => c).length;
+    return done / checks.length;
+  }
+
+  static List<String> missingFrom(Map<String, dynamic> me) {
+    final profile = (me['profile'] as Map?) ?? const {};
+    final photos = (profile['photos'] as List?) ?? const [];
+    final prompts = (profile['prompts'] as List?) ?? const [];
+    return [
+      if (((profile['bio'] as String?) ?? '').trim().length < 20) 'Write a short bio',
+      if (photos.length < 3) 'Add more photos',
+      if (((profile['interests'] as List?) ?? const []).isEmpty) 'Pick your interests',
+      if (prompts.isEmpty) 'Answer a prompt',
+      if (((me['user']?['is_verified'] as bool?) ?? false) == false) 'Verify your profile',
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final milan = Theme.of(context).extension<MilanColors>()!;
+    if (percent >= 1.0) return const SizedBox.shrink();
+    final pct = (percent * 100).round();
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(Spacing.radiusMd),
+      child: Container(
+        padding: EdgeInsets.all(Spacing.lg),
+        decoration: BoxDecoration(
+          color: milan.paper100,
+          borderRadius: BorderRadius.circular(Spacing.radiusMd),
+          border: Border.all(color: milan.line200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.pie_chart_outline, size: 18, color: milan.dhaka500),
+              SizedBox(width: Spacing.sm),
+              Text('Profile $pct% complete',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              const Spacer(),
+              if (onTap != null)
+                Icon(Icons.chevron_right, color: milan.ink400),
+            ]),
+            SizedBox(height: Spacing.sm),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: percent,
+                minHeight: 6,
+                backgroundColor: milan.line200,
+                valueColor: AlwaysStoppedAnimation(milan.dhaka500),
+              ),
+            ),
+            if (missing.isNotEmpty) ...[
+              SizedBox(height: Spacing.sm),
+              Text('Next: ${missing.first} to be seen more',
+                  style: TextStyle(fontSize: 12, color: milan.ink600)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
